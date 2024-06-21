@@ -1,5 +1,3 @@
-# This project was to keep rent payments on track, making sure everything was even for each tenant.
+# This web scraper project helps keep rent payments on track, making sure everything was even for each tenant.
 
-rent.py  - contains Python source code that reads in a CSV file and manipulates the information to give desired output
-rent_payments.csv - rent logs within a CSV format
-Makefile - used to quickly retrieve wanted information
+rent.py  - contains Python source code that loads a webpage and scrapes data from it, cleans and manipulates data as needed.
