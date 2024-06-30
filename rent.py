@@ -1,4 +1,4 @@
-import creds
+import creds #a python file that has personal login information
 import requests
 from bs4 import BeautifulSoup
 import time
