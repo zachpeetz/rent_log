@@ -1,7 +1,12 @@
 import creds #a python file that has personal login information
-import requests
+from selenium.webdriver.chrome.options import Options
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 import time
+
 
 """
 This function takes in a list of lists, ledger_rows is each individual payment that has been made
@@ -66,6 +71,27 @@ def prompts():
     print('[6]: money owed per person')
     print('[Q]: to quit')
 
+""" This can optionally turn on headless mode, useful for testing, creates a webdriver to use
+    Returns: webdriver to use to scrape website
+"""
+def get_webdriver(headless=True):
+    options = Options()
+    if headless:
+        options.add_argument("--headless")
+    #suppress logging
+    options.add_argument("--log-level=3")
+    options.add_argument("--disable-logging")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--no-sandbox")
+    
+    #suppress unnecessary console messages
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-infobars")
+    options.add_argument("--disable-popup-blocking")
+    options.add_argument("--disable-software-rasterizer")
+    options.add_argument("--disable-features=VizDisplayCompositor")
+    return webdriver.Chrome(options=options)
 
 """
 This is the main method of the rent web scraper
@@ -74,31 +100,70 @@ Then it scrapes the data and cleans it to ensure useful and wanted information
 Gives prompts to user for their usage
 """
 if __name__ == '__main__':
-    #load in the proper url, after logging in and navigating to ledger page
-    response = requests.get('https://tallardapartments.appfolio.com/connect/ledger', cookies=creds.cookies, headers=creds.headers)
 
-    # check to make sure that the page was successfully loaded in
-    if response.status_code == 200:
-        print("Ledger correctly loaded with status code 200.")
-        time.sleep(2)
-    else:
-        print("Could not properly load in ledger.")
+    driver = get_webdriver(headless=True)  #set headless=False to see the browser
+    
+    try:
+        driver.get('https://tallardapartments.appfolio.com/connect/users/sign_in')
 
-    #save content to html file to parse through
-    with open('ledger_page.html', 'w', encoding='utf-8') as file:
-        file.write(response.content.decode('utf-8'))
-    print("Loading content to scrape...")
-    time.sleep(3)
+        #enter login credentials
+        username_input = driver.find_element(By.CSS_SELECTOR, 'input[data-testid="email-input"]')
+        username_input.send_keys(creds.username)
+
+        password_input = driver.find_element(By.CSS_SELECTOR, 'input[data-testid="password-input"]')
+        password_input.send_keys(creds.password)
+
+
+        sign_in_button = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//button[@data-testid="sign-in-button" and @aria-label="Sign In"]'))
+        )
+        
+        #click the Sign In button
+        sign_in_button.click()
+        
+        print("Credentials successfully extracted and submitted.")
+
+        # Wait for the home page to load
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.LINK_TEXT, 'Payments'))
+        )
+        print("Logged into Home page successfully.")
+
+        #navigate to the payments page
+        payments_link = driver.find_element(By.LINK_TEXT, 'Payments')
+        payments_link.click()
+
+        print("Payments page loaded successfully.")
+
+        #navigate to ledger
+        driver.get('https://tallardapartments.appfolio.com/connect/ledger')
+
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, 'js-footable'))
+        )
+        print("Ledger page loaded successfully.")
+
+        #get html from ledger webpage
+        html_content = driver.page_source
+
+        # Save content to HTML file
+        with open('ledger_page.html', 'w', encoding='utf-8') as file:
+            file.write(html_content)
+
+    finally:
+        driver.quit()
 
     #load content from file
     with open('ledger_page.html', 'r', encoding='utf-8') as file:
         html_content = file.read()
+    print("Loading content to scrape...")
+    time.sleep(2)
 
     #parse the HTML using BeautifulSoup
     soup = BeautifulSoup(html_content, 'html.parser')
-
+    
     #find the table, has all information that is needed
-    table = soup.find('table', class_='js-footable table table--no-border tenant-ledger-table')
+    table = soup.find('table', {'class': 'tenant-ledger-table'})
 
     #find the headers, this will be the keys in our dictionary
     headers = table.find('thead').find_all('th')
